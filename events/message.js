@@ -7,6 +7,7 @@ module.exports = async(client, message) => {
     const cmd = client.commands.get(command);
     if(!cmd) return;
   
+    message.delete();
     cmd.run(client, message, args);
   }; 
   

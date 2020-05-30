@@ -1,10 +1,12 @@
 const Discord = require("discord.js");
-const mongoose = require("mongoose");
 const client = new Discord.Client();
+const mongoose = require("mongoose");
 const Enmap = require('enmap');
 const fs = require('fs');
 
-client.config = require("./config");
+require('./database/connect.js')
+
+client.config = require("./config.js");
 client.commands = new Enmap();
 client.models = {
     timesheet: require("./database/models/timesheet")

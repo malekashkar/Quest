@@ -1,9 +1,10 @@
 const mongoose = require("mongoose");
 
 const Timesheet = new mongoose.Schema({
-  _id: String,
   user: String,
-  time: {type: Number, default: Date.now()},
+  login: Number,
+  logout: Number,
+  totalTime: Number,
 });
 
 module.exports = mongoose.model("Timesheet", Timesheet);
