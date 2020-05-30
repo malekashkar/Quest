@@ -1,0 +1,23 @@
+{
+  "name": "Quest",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dep0sit/Quest.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Dep0sit/Quest/issues"
+  },
+  "homepage": "https://github.com/Dep0sit/Quest#readme",
+  "dependencies": {
+    "discord.js": "^12.2.0"
+  }
+}
