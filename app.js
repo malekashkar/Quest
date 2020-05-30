@@ -4,8 +4,11 @@ const client = new Discord.Client();
 const Enmap = require('enmap');
 const fs = require('fs');
 
-client.config = config;
+client.config = require("./config");
 client.commands = new Enmap();
+client.models = {
+    timesheet: require("./database/models/timesheet")
+}
 
 fs.readdir("./events/", (err, files) => {
   if (err) return console.error(err);
@@ -26,4 +29,4 @@ fs.readdir("./commands/", (err, files) => {
   });
 });
 
-client.login(config.token);
+client.login(client.config.token);

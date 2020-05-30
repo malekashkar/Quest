@@ -18,6 +18,8 @@
   },
   "homepage": "https://github.com/Dep0sit/Quest#readme",
   "dependencies": {
-    "discord.js": "^12.2.0"
+    "discord.js": "^12.2.0",
+    "enmap": "^5.2.4",
+    "mongoose": "^5.9.16"
   }
 }
