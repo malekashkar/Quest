@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const client = new Discord.Client();
+const client = new Discord.Client({ partials: ['MESSAGE', 'REACTION']});
 const mongoose = require("mongoose");
 const Enmap = require('enmap');
 const fs = require('fs');
