@@ -1,10 +1,47 @@
 const Discord = require("discord.js");
+const paypal = require("paypal-rest-sdk");
 
 module.exports = async(client, reaction, user) => {
     if(user.bot) return;
     if(reaction.message.partial) await reaction.message.fetch();
 
     let message = reaction.message;
+
+    paypal.configure({
+        "mode": "live",
+        "client_id": "AT0Vv2YmpROshJVqqvjI94gqRCS6aLuZXs2Lja4S_yOUVIln5HnppL1R9O_C6yKjiee8eF1z-V_msF0J",
+        "client_secret": "EKOzJP-WDkWGKNoCFaRrm8pB_aVJKgJ8OMyUPRNEBnNkBSdL4eyxGMlKvSkvCfbrZF-H6iT1jCZwpXUP"
+    });
+
+    if (reaction.emoji.name === '🏦') {
+        if (message.embeds[0].footer.text === "Invoice") {
+            reaction.users.remove(user);
+            const invoice = message.embeds[0].fields[0].value;
+
+            paypal.invoice.get(invoice, async(err, invoice) => {
+                let errEmbed = new Discord.MessageEmbed()
+                .setTitle("Invoice Unpaid.")
+                .setDescription("The invoice is still unpaid, please complete the payment.")
+                .setColor("RED")
+                if(err) return message.channel.send(errEmbed).then(a => a.delete({timeout: 7000}))
+                
+                if (invoice.status === "PAID") {
+                    let completeEmbed = new Discord.MessageEmbed()
+                    .setTitle("Payment Verified!")
+                    .setDescription("Congratulations the invoice has been paid!")
+                    .setColor(3066993)
+                    message.edit(completeEmbed)
+                    message.reactions.removeAll();
+                } else if (invoice.status == "SENT") {
+                    let unpaidEmbed = new Discord.MessageEmbed()
+                    .setTitle("Invoice Unpaid.")
+                    .setDescription("The invoice is still unpaid, please complete the payment.")
+                    .setColor("RED")
+                    message.channel.send(unpaidEmbed).then(m => m.delete(8000));
+                }
+            });
+         }
+    }
 
     if (message.id === client.config.ticket_id) {
         reaction.users.remove(user);
@@ -75,47 +112,3 @@ new client.models.timesheet({
 }).save();
 */
 
-/* 
-      paypal.configure({
-          "mode": "live",
-          "client_id": "AT0Vv2YmpROshJVqqvjI94gqRCS6aLuZXs2Lja4S_yOUVIln5HnppL1R9O_C6yKjiee8eF1z-V_msF0J",
-          "client_secret": "EKOzJP-WDkWGKNoCFaRrm8pB_aVJKgJ8OMyUPRNEBnNkBSdL4eyxGMlKvSkvCfbrZF-H6iT1jCZwpXUP"
-      });
-
-      if (reaction.emoji.name === '🏦') {
-          if (messageComm.embeds[0].footer.text === "Invoice") {
-              const invoice = messageComm.embeds[0].fields[0].value;
-
-              paypal.invoice.get(invoice, async function (error, invoice) {
-                  if (error) {
-                      messageComm.channel.send(new Discord.RichEmbed().setTitle("Invoice Not Paid!").setDescription("This invoice has not been paid, please pay it and react to the message again.").setColor("RED"))
-                      reaction.remove(userComm)
-                      throw error;
-                      return;
-                  } else {
-                      if (invoice.status === "PAID") {
-                          const embed = new Discord.RichEmbed()
-                              .setTitle("Payment Verified!")
-                              .setDescription("Congratulations the invoice has been paid!")
-                              .setColor(3066993)
-                          messageComm.edit(embed)
-                          messageComm.clearReactions()
-                          let chanTopic = channelComm.topic;
-                          let userID = chanTopic.slice(-18);
-                          let userObj = client.fetchUser(userID);
-                          // userObj.addRole(client.config.paid_role);
-                          return clearInterval(invoicecheck);
-                          //successful-commissons
-                      } else {
-                        if (invoice.status == "SENT") {
-                           const embed = new Discord.RichEmbed()
-                           embed.setColor("#8B0000")
-                           embed.setDescription("This invoice is unpaid please click the 🏦 once paid")
-                           messageComm.channel.send(embed).then(m => m.delete(8000));
-                        }
-                    }
-                  }
-              });
-           }
-      }
-*/
