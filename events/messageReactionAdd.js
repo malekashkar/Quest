@@ -1,5 +1,6 @@
 const Discord = require("discord.js");
 const paypal = require("paypal-rest-sdk");
+const moment = require("moment");
 
 module.exports = async(client, reaction, user) => {
     if(user.bot) return;
@@ -96,19 +97,78 @@ module.exports = async(client, reaction, user) => {
                 .setFooter(chan.id);
                 chan.send(collectedEmbed).then(m => m.pin())
 
-                chan.createOverwrite(arrayX[0].mentions.members.first(), { SEND_MESSAGES: true, VIEW_CHANNEL: true });
-                chan.send("<@&"+ client.config.manager_role +">")
+                // chan.createOverwrite(arrayX[0].mentions.members.first().id, { SEND_MESSAGES: true, VIEW_CHANNEL: true });
+                chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}))
             });
         }
     }
-}
 
-/*
-new client.models.timesheet({
-    user: message.author.id,
-    login: Date.now(),
-    logout: Date.now(),
-    totalTime: Date.now()
-}).save();
-*/
+    if(message.id === client.config.front_desk) {
+        reaction.users.remove(user);
+
+        if(reaction.emoji.name === "✅") {
+            let doc = await client.models.timesheet.findOne({
+                user: message.author.id,
+                status: `open`
+            });
+
+            let wrong = new Discord.MessageEmbed()
+            .setTitle(`Please make sure you end working before you begin working.`)
+            .setColor(`#FF6347`)
+            if(doc) return user.send(wrong);
+
+            let userStarted = new Discord.MessageEmbed()
+            .setTitle(`You have signed-in to a session.`)
+            .addField(`Login Time`, moment(Date.now()).format('DD/MM/YYYY hh:mm:ss A'))
+            .setColor(client.config.color)
+            user.send(userStarted);
+
+            new client.models.timesheet({
+                user: message.author.id,
+                login: Date.now(),
+                logout: 0,
+                totalTime: 0,
+                status: `open`
+            }).save();
+        } else if(reaction.emoji.name === "🚫") {
+            let timeChannel = message.guild.channels.cache.get(client.config.time_reports);
+            if(!timeChannel) return;
+            
+            let doc = await client.models.timesheet.findOne({
+                user: message.author.id,
+                status: `open`,
+                logout: 0,
+                totalTime: 0,
+            });
+
+            let wrong = new Discord.MessageEmbed()
+            .setTitle(`Please make sure you begin working before you end working.`)
+            .setColor(`#FF6347`)
+            if(!doc) return user.send(wrong);
+
+            let serverSend = new Discord.MessageEmbed()
+            .setTitle(`Signed Out`)
+            .setDescription(`${user} has signed-out of working.`)
+            .addField(`Login Time`, moment(doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .addField(`Logout Time`, moment(Date.now()).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .addField(`Session Time`, moment(Date.now() - doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .setColor(client.config.color)
+
+            let userSend = new Discord.MessageEmbed()
+            .setTitle(`You have signed-out of working.`)
+            .addField(`Login Time`, moment(doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .addField(`Logout Time`, moment(Date.now()).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .addField(`Session Time`, moment(Date.now() - doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .setColor(client.config.color)
+
+            user.send(userSend);
+            timeChannel.send(serverSend);
+
+            doc.logout = Date.now();
+            doc.totalTime = Date.now() - doc.login;
+            doc.status = `closed`;
+            doc.save();
+        }
+    }
+}
 

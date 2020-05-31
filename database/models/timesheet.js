@@ -5,6 +5,7 @@ const Timesheet = new mongoose.Schema({
   login: Number,
   logout: Number,
   totalTime: Number,
+  status: String
 });
 
 module.exports = mongoose.model("Timesheet", Timesheet);
