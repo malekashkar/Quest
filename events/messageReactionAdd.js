@@ -170,5 +170,17 @@ module.exports = async(client, reaction, user) => {
             doc.save();
         }
     }
+
+    if(message.id === client.config.verifyMessage) {
+        reaction.users.remove(user);
+        if(reaction.emoji.name === "💻") {
+            let member = message.guild.members.cache.get(user.id);
+            let role = message.guild.roles.cache.get(client.config.verified);
+            let removeRole = message.guild.roles.cache.get(client.config.unverified);
+
+            member.roles.remove(removeRole);
+            member.roles.add(role);
+        }
+    }
 }
 
