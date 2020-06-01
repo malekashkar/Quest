@@ -9,7 +9,8 @@ require('./database/connect.js')
 client.config = require("./config.json");
 client.commands = new Enmap();
 client.models = {
-    timesheet: require("./database/models/timesheet")
+    timesheet: require("./database/models/timesheet"),
+    ticket: require("./database/models/ticket")
 }
 
 fs.readdir("./events/", (err, files) => {

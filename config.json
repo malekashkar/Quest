@@ -20,5 +20,8 @@
   "verified": "701973012248788993",
   "unverified": "657115423854166039",
   "front_desk": "716482222378450945",
-  "time_reports": "716678936771428403"
+  "time_reports": "716678936771428403",
+  "commissionChannel": "716790912990183495",
+  "hoursADay": 2,
+  "pricePerHour": 10
 }

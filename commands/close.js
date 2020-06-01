@@ -1,9 +1,9 @@
 const Discord = require("discord.js");
 
 exports.run = async (client, message, args) => {
-    if(!message.member.roles.cache.some(r => ["📈 Sales Representative", "💼 Manager","👑 COO", "👑 CEO", "💻 developers","✔️ Verified", 'Admin'].includes(r.name))) return;
-    if(!message.channel.name.startsWith("📝-order-")) return;
-
+    let doc = client.models.ticket.findOne({ ticket: message.channel.id });
+    if(!doc.exists || doc.user !== message.author.id) return;
+    
     let embed = new Discord.MessageEmbed()
     embed.setDescription(`To close this ticket, type \`confirm\` in the chat.\nYou have a total of 10 seconds to do so.`);
     embed.setColor(client.config.color);

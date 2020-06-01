@@ -1,10 +1,12 @@
 const Discord = require("discord.js");
 const paypal = require("paypal-rest-sdk");
 const moment = require("moment");
+const ms = require("ms");
 
 module.exports = async(client, reaction, user) => {
     if(user.bot) return;
     if(reaction.message.partial) await reaction.message.fetch();
+    await user.createDM();
 
     let message = reaction.message;
 
@@ -38,7 +40,13 @@ module.exports = async(client, reaction, user) => {
                     .setTitle("Invoice Unpaid.")
                     .setDescription("The invoice is still unpaid, please complete the payment.")
                     .setColor("RED")
-                    message.channel.send(unpaidEmbed).then(m => m.delete(8000));
+                    message.channel.send(unpaidEmbed).then(m => m.delete({timeout: 8000}));
+                } else if(invoice.status == "UNPAID") {
+                    let unpaidEmbed = new Discord.MessageEmbed()
+                    .setTitle("Invoice Unpaid.")
+                    .setDescription("The invoice is still unpaid, please complete the payment.")
+                    .setColor("RED")
+                    message.channel.send(unpaidEmbed).then(m => m.delete({timeout: 8000}));
                 }
             });
          }
@@ -52,53 +60,161 @@ module.exports = async(client, reaction, user) => {
             let chan = await message.guild.channels.create(`📝-order-${seq}`);
 
             chan.setParent(client.config.order_parent);
-            chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });;
+            chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
             chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
-            chan.setTopic(`${user.id}`);
 
-            let users = [];
-
-            message.guild.roles.cache.get('652633724709765155').members.forEach(m => users.push(m.id));
-            let showUserTags = message.guild.roles.cache.get('652633724709765155').members.map(m => m.user.tag).join('\n');
-
-            let collector = chan.createMessageCollector(m => m.author.id === user.id), index = 0;
-            let questions = [`**Please @ the 📈 Sales Representative that got you to join Quest**\n\nList of Sales Representative : \`\`\`${showUserTags}\`\`\``, `**What role are you requesting**\n\`\`\`[ Developers ] \n 💻 Java Developer \n 💻 Expedited Developer \n 💻 Web Developer \n 💻 Bot Developer \n 💻 Jar Developer \n 💻 Forge Developer \n 💻 Sys Admin \n 💻 Configurator\`\`\``, `Tell us a bit about what you're requesting.`, `What is your budget?`, `What is your deadline?`, `Do you have any extra information?`, `Do you have any examples? (Please use an https://imgur.com link)`]
-
-            let embed = new Discord.MessageEmbed()
-            .setColor("#00BBE8")
+            /* Ask the questions below */
+            let qEmbed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
             .setTitle(`Answer the following question.`)
-            .setDescription(questions[index])
-            .setFooter(`You have 16 minutes to answer the question.`)
-            chan.send(embed);
+            .setFooter(`You have 16 minutes to answer the question.`);
 
-            collector.on('collect', m => {
-                if(index + 1 === questions.length) return collector.stop();
-                embed.setDescription(questions[++index]);
-                chan.send(embed);
+            let emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+            let commissionChannel = message.guild.channels.cache.get(client.config.commissionChannel);
+            let salesReps = message.guild.roles.cache.get('652633724709765155').members.map(m => `@${m.user.tag}`);
+            let devJobs = ['Java Developer', 'Expedited Developer', 'Web Developer', 'Bot Developer', 'Jar Developer', 'Forge Developer', 'Sys Admin', 'Configurator'];
+            let questions = [`Please tag the sales rep below that brought you here.`, `What kind of developer are you requesting?`, `Please provide some detail about what you are requesting.`, `What is your deadline?`, `Do you have any more info? Such as any links that may be useful to the developer.`]
+
+            /* First question */
+            let reps = ``;
+            for(let i = 0; i < salesReps.length; i++) reps += `${emojis[i]} - ${salesReps[i]}\n`;
+
+            qEmbed.setDescription(`${questions[0]}\n\n\`\`\`${reps}\`\`\``);
+            let repEmbed = await chan.send(qEmbed);
+            for(let i = 0; i < salesReps.length; i++) if(!repEmbed.deleted) await repEmbed.react(emojis[i]);
+
+            /* First Collector */
+            let repCollector = repEmbed.createReactionCollector((reaction, u) => emojis.includes(reaction.emoji.name) && u.id === user.id, { max: 1 });
+            repCollector.on('collect', async(reaction, user) => {
+                repEmbed.delete();
+
+                let tempArr = message.guild.roles.cache.get('652633724709765155').members.map(m => m.id);
+                let salesRep = message.guild.members.cache.get(tempArr[emojis.indexOf(reaction.emoji.name)]);
+
+                /* Second Question */
+                let jobs = ``;
+                for(let i = 0; i < devJobs.length; i++) jobs += `${emojis[i]} - ${devJobs[i]}\n`;
+
+                qEmbed.setDescription(`${questions[1]}\n\n\`\`\`${jobs}\`\`\``);
+                let devEmbed = await chan.send(qEmbed);
+                for(let i = 0; i < devJobs.length; i++) if(!devEmbed.deleted) await devEmbed.react(emojis[i]);
+
+                /* Second Collector */
+                let devCollector = devEmbed.createReactionCollector((reaction, u) => emojis.includes(reaction.emoji.name) && u.id === user.id, { max: 1 });
+                devCollector.on('collect', async(reaction, user) => {
+                    devEmbed.delete();
+
+                    let devRole = message.guild.roles.cache.find(x => x.name === `💻 ${devJobs[emojis.indexOf(reaction.emoji.name)]}`);
+
+                    /* Third question */
+                    qEmbed.setDescription(questions[2]);
+                    let q1 = await chan.send(qEmbed);
+
+                    /* Third Collector */
+                    let collector = chan.createMessageCollector(m => m.author.id === user.id, { max: 1 });
+                    collector.on('collect', async m => {
+                        let details = m.content;
+                        m.delete();
+                        q1.delete();
+
+                        /* Fourth Question */
+                        qEmbed.setDescription(questions[3]);
+                        let q2 = await chan.send(qEmbed);
+                        
+                        /* Fourth Collector */
+                        let collector = chan.createMessageCollector(m => m.author.id === user.id, { max: 1 });
+                        collector.on('collect', async m => {
+                            let deadline = m.content;
+                            m.delete();
+                            q2.delete();
+
+                            /* Fifth Question */
+                            qEmbed.setDescription(questions[4]);
+                            let q3 = await chan.send(qEmbed);
+                            
+                            /* Fifth Collector */
+                            let collector = chan.createMessageCollector(m => m.author.id === user.id, { max: 1 });
+                            collector.on('collect', async m => {
+                                let extra = m.content;
+                                m.delete();
+                                q3.delete();
+
+                                let collectedEmbed = new Discord.MessageEmbed()
+                                .setColor(client.config.color)
+                                .setTitle("Commission")
+                                .addField("**Channel Name**", `<#${chan.id}>`, true)
+                                .addField("**Sales Rep**", `${salesRep}`, true)
+                                .addField("**Development Type**", `${devRole}`, true)
+                                .addField("**Details**", details, true)
+                                .addField("**Deadline**", deadline, true)
+                                .addField("**Extra**", extra, true)
+                                .setFooter(chan.id);
+
+                                let commID = await commissionChannel.send(collectedEmbed); commID.react("💰");
+                                chan.send(collectedEmbed).then(m => m.pin())
+                                chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+
+                                new client.models.ticket({
+                                    "user": message.author.id,
+                                    "ticket": chan.id,
+                                    "commission": commID.id,
+                                    "details": details,
+                                    "price": 0
+                                }).save();
+                            });
+                        });
+                    });
+                });
             });
+        }
+    }
 
-            collector.on('end', async collected => {
-                let arrayX = collected.array();
+    if(message.channel.id === client.config.commissionChannel) {
+        reaction.users.remove(user);
 
-                const fetched = await chan.messages.fetch({limit: 50});
-                chan.bulkDelete(fetched);
+        if(reaction.emoji.name === "💰") {
+            let qEmbed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Answer the following question.`)
+            .setFooter(`You have 16 minutes to answer the question.`);
 
-                let collectedEmbed = new Discord.MessageEmbed()
-                .setColor(client.config.color)
-                .setTitle("Commission")
-                .addField("**Channel Name**", `<#${chan.id}>`)
-                .addField("**Sales Representative**", arrayX[0].mentions.members.first())
-                .addField("**What role are you requesting**", arrayX[1].content)
-                .addField("Details", arrayX[2].content)
-                .addField("Budget", arrayX[3].content)
-                .addField("Deadline", arrayX[4].content)
-                .addField("Extra Info", arrayX[5].content)
-                .addField("Examples", arrayX[6].content)
-                .setFooter(chan.id);
-                chan.send(collectedEmbed).then(m => m.pin())
+            /* First question */
+            qEmbed.setDescription(`How many hours would this job take you to complete?`)
+            let a = await user.send(qEmbed);
 
-                // chan.createOverwrite(arrayX[0].mentions.members.first().id, { SEND_MESSAGES: true, VIEW_CHANNEL: true });
-                chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}))
+            /* First collector */
+            let collector = user.dmChannel.createMessageCollector(m => m.author.id === user.id, {max: 1});
+            collector.on('collect', async m => {
+                let hours = m.content;
+                a.delete();
+
+                /* Second question */
+                qEmbed.setDescription(`Please provide your portfolio link.`)
+                let b = await user.send(qEmbed);
+
+                /* Second collector */
+                let collector = user.dmChannel.createMessageCollector(m => m.author.id === user.id, {max: 1});
+                collector.on('collect', async m => {
+                    let portfolio = m.content;
+                    b.delete();
+
+                    let days = parseInt(hours) / client.config.hoursADay; 
+                    let deadline = new Date();
+                    deadline.setDate(deadline.getDate() + days);
+
+                    let channel = message.guild.channels.cache.get(message.embeds[0].footer.text);
+                    let quote = new Discord.MessageEmbed()
+                    .setColor(client.config.color)
+                    .setTitle(`New Quote`)
+                    .setDescription(`Quote from developer ${user}.`)
+                    .setThumbnail(user.displayAvatarURL())
+                    .addField(`Price`, parseInt(parseInt(hours) * client.config.pricePerHour * 1.20), true)
+                    .addField(`Deadline`, moment(deadline).format(`MMMM Do`), true)
+                    .addField(`Portfolio`, portfolio, true)
+                    .setFooter(user.id);
+                    let quoteMSG = await channel.send(quote);
+                    quoteMSG.react("✅"); quoteMSG.react("🚫");
+                });
             });
         }
     }
@@ -119,7 +235,7 @@ module.exports = async(client, reaction, user) => {
 
             let userStarted = new Discord.MessageEmbed()
             .setTitle(`You have signed-in to a session.`)
-            .addField(`Login Time`, moment(Date.now()).format('DD/MM/YYYY hh:mm:ss A'))
+            .addField(`Login Time`, moment(Date.now()).format('LT'))
             .setColor(client.config.color)
             user.send(userStarted);
 
@@ -149,16 +265,16 @@ module.exports = async(client, reaction, user) => {
             let serverSend = new Discord.MessageEmbed()
             .setTitle(`Signed Out`)
             .setDescription(`${user} has signed-out of working.`)
-            .addField(`Login Time`, moment(doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
-            .addField(`Logout Time`, moment(Date.now()).format('DD/MM/YYYY hh:mm:ss A'), true)
-            .addField(`Session Time`, moment(Date.now() - doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .addField(`Login Time`, moment(doc.login).format('LT'), true)
+            .addField(`Logout Time`, moment(Date.now()).format('LT'), true)
+            .addField(`Session Time`, ms(Date.now() - doc.login), true)
             .setColor(client.config.color)
 
             let userSend = new Discord.MessageEmbed()
             .setTitle(`You have signed-out of working.`)
-            .addField(`Login Time`, moment(doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
-            .addField(`Logout Time`, moment(Date.now()).format('DD/MM/YYYY hh:mm:ss A'), true)
-            .addField(`Session Time`, moment(Date.now() - doc.login).format('DD/MM/YYYY hh:mm:ss A'), true)
+            .addField(`Login Time`, moment(doc.login).format('LT'), true)
+            .addField(`Logout Time`, moment(Date.now()).format('LT'), true)
+            .addField(`Session Time`, ms(Date.now() - doc.login), true)
             .setColor(client.config.color)
 
             user.send(userSend);
@@ -180,6 +296,98 @@ module.exports = async(client, reaction, user) => {
 
             member.roles.remove(removeRole);
             member.roles.add(role);
+        }
+    }
+
+    if(message.channel.parent && message.channel.parent.id === client.config.order_parent) {
+        reaction.users.remove(user);
+
+        if(reaction.emoji.name === "🚫") {
+            message.delete();
+
+            let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
+
+            let member = message.guild.members.cache.get(message.embeds[0].footer.text);
+            let embed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Quote Declined`)
+            .setDescription(`Quote declined for ticket below.`)
+            .addField(`Ticket Name`, message.channel.name, true)
+            .addField(`Ticket Details`, doc.details, true)
+            .addField(`Ticket Owner`, user.tag, true)
+            member.send(embed);
+        } else if(reaction.emoji.name === "✅") {
+            message.delete();
+
+            let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
+            let member = message.guild.members.cache.get(message.embeds[0].footer.text);
+            let price = parseInt(message.embeds[0].fields[0].value);
+
+            let comChan = message.guild.channels.cache.get(client.config.commissionChannel);
+            let msg = await comChan.messages.fetch(doc.commission); msg.delete();
+
+            doc.price = price;
+            doc.save();
+
+            message.channel.createOverwrite(member, { VIEW_CHANNEL: true, READ_MESSAGE_HISTORY: true, SEND_MESSAGES: true });
+
+            let embed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Quote Accepted`)
+            .setDescription(`Quote accepted for ticket below.`)
+            .addField(`Ticket Name`, message.channel.name, true)
+            .addField(`Ticket Details`, doc.details, true)
+            .addField(`Ticket Owner`, user.tag, true)
+            member.send(embed);
+
+            let ticketEmbed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Developer Accepted`)
+            .setDescription(`Developer ${member} has been added to the order.`)
+            message.channel.send(ticketEmbed);
+
+            let invoiceJSON = {
+                "merchant_info": {
+                    "email":"twisor2001s@gmail.com",
+                    "first_name":"Takoma",
+                    "last_name":"Wisor",
+                    "business_name":"Quest Development"
+                },
+                "items": [
+                    {
+                        "name":"Custom Product\nOrdered from Quest Development",
+                        "quantity": 1.0,
+                        "unit_price":{
+                            "currency":"USD",
+                            "value": price
+                        }
+                    }
+                ],
+                "terms": "By paying this invoice you accept to are TOS - https://docs.google.com/document/d/1FcsqEcdfgTWFAfmHbsNIBXKKn6XlLSFohpCpcmzpOSQ/edit?usp=sharing",
+                "tax_inclusive": false,
+                "total_amount": {
+                    "currency": "USD",
+                    "value": price
+                }
+            }
+            
+            paypal.invoice.create(invoiceJSON, async(err, invoice) => {
+                if(err) return await console.log(JSON.stringify(err));
+        
+                paypal.invoice.send(invoice.id, async(err, rv) => {
+                    if (err) return await console.log(JSON.stringify(err));
+        
+                    let embed = new Discord.MessageEmbed()
+                    .setTitle("Invoice Created!")
+                    .setDescription(`Click [here](https://www.paypal.com/invoice/payerView/details/${invoice.id}) to pay the invoice. Click the emoji once paid.`)
+                    .addField(`**Invoice ID**`, invoice.id, true)
+                    .addField(`**Price**`, `$${price}`, true)
+                    .setThumbnail("https://www.questdevelopment.net/assets/images/icon.png")
+                    .setColor(client.config.color)
+                    .setFooter(`Invoice`);
+                    message.channel.send(embed).then(m => m.react("🏦"));
+                });
+            });
         }
     }
 }
