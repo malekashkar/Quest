@@ -16,6 +16,7 @@ module.exports = async(client, reaction, user) => {
         "client_secret": "EKOzJP-WDkWGKNoCFaRrm8pB_aVJKgJ8OMyUPRNEBnNkBSdL4eyxGMlKvSkvCfbrZF-H6iT1jCZwpXUP"
     });
 
+    /* Invoice Checking */
     if (reaction.emoji.name === '🏦') {
         if (message.embeds[0].footer.text === "Invoice") {
             reaction.users.remove(user);
@@ -52,9 +53,11 @@ module.exports = async(client, reaction, user) => {
          }
     }
 
+    /* Ticket Creating */
     if (message.id === client.config.ticket_id) {
         reaction.users.remove(user);
 
+        /* Order Creating */
         if (reaction.emoji.name === '📝') {
             let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
             let chan = await message.guild.channels.create(`📝-order-${seq}`);
@@ -62,6 +65,7 @@ module.exports = async(client, reaction, user) => {
             chan.setParent(client.config.order_parent);
             chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
             chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
+            chan.send(`${user}`).then(m => m.delete({timeout: 1000}));
 
             /* Ask the questions below */
             let qEmbed = new Discord.MessageEmbed()
@@ -72,7 +76,7 @@ module.exports = async(client, reaction, user) => {
             let emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
             let commissionChannel = message.guild.channels.cache.get(client.config.commissionChannel);
             let salesReps = message.guild.roles.cache.get('652633724709765155').members.map(m => `@${m.user.tag}`);
-            let devJobs = ['Java Developer', 'Expedited Developer', 'Web Developer', 'Bot Developer', 'Jar Developer', 'Forge Developer', 'Sys Admin', 'Configurator'];
+            let devJobs = ['Java Developer', 'Web Developer', 'Bot Developer', 'Jar Developer', 'Forge Developer', 'Sys Admin', 'Configurator'];
             let questions = [`Please tag the sales rep below that brought you here.`, `What kind of developer are you requesting?`, `Please provide some detail about what you are requesting.`, `What is your deadline?`, `Do you have any more info? Such as any links that may be useful to the developer.`]
 
             /* First question */
@@ -150,8 +154,16 @@ module.exports = async(client, reaction, user) => {
                                 .addField("**Extra**", extra, true)
                                 .setFooter(chan.id);
 
+                                let quoteInfo = new Discord.MessageEmbed()
+                                .setTitle(`Incoming Quotes`)
+                                .setDescription(`You will shortly receive quotes from developers.\nTo accept the quote, click the ✅.\nTo deny the quote, click the 🚫.`)
+                                .setColor(client.config.color);
+
                                 let commID = await commissionChannel.send(collectedEmbed); commID.react("💰");
-                                chan.send(collectedEmbed).then(m => m.pin())
+                                let t = await commissionChannel.send(`${devRole}`); t.delete({timeout: 1000});
+                                chan.send(collectedEmbed)
+                                quoteInfo.send()
+                                .then(m => m.pin())
                                 chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
 
                                 new client.models.ticket({
@@ -159,11 +171,78 @@ module.exports = async(client, reaction, user) => {
                                     "ticket": chan.id,
                                     "commission": commID.id,
                                     "details": details,
-                                    "price": 0
+                                    "price": 0,
+                                    "type": devRole.name
                                 }).save();
                             });
                         });
                     });
+                });
+            });
+        } else if(reaction.emoji.name === "📜") {
+            let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
+            let chan = await message.guild.channels.create(`📜-application-${seq}`);
+
+            chan.setParent(client.config.application_parent);
+            chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
+            chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
+            chan.send(`${user}`).then(m => m.delete({timeout: 1000}));
+
+            /* Ask the questions below */
+            let qEmbed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Answer the following question.`)
+            .setFooter(`You have 16 minutes to answer the question.`);
+
+            let devJobs = ['Java Developer', 'Web Developer', 'Bot Developer', 'Jar Developer', 'Forge Developer', 'Sys Admin', 'Configurator'];
+            let questions = [`What role are you applying for?`, `How old are you? `, `What is your timezone? `, `What is your portfolio link?`, `Why do you want to work for Quest Development?`, `How did you find out about Quest Development?`, `How active can you be?`, `Please list the teams that you have worked for in the past.`, `What teams are you currently working for? What position are you there?`, `Please tell us a little bit about yourself. What do you do for hobbies and things like that.`];
+            let emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+            let index = 0;
+
+            let jobs = ``;
+            for(let i = 0; i < devJobs.length; i++) jobs += `${emojis[i]} - ${devJobs[i]}\n`;
+
+            qEmbed.setDescription(`${questions[0]}\n\n\`\`\`${jobs}\`\`\``);
+            let devMsg = await chan.send(qEmbed);
+            for(let i = 0; i < devJobs.length; i++) devMsg.react(emojis[i]);
+
+            let eCollector = devMsg.createReactionCollector((reaction, u) => emojis.includes(reaction.emoji.name) && u.id === user.id);
+            eCollector.on('collect', async(reaction, user) => {
+                let job = devJobs[emojis.indexOf(reaction.emoji.name)];
+                devMsg.delete();
+
+                qEmbed.setDescription(questions[++index]);
+                let a = await chan.send(qEmbed);
+
+                let collector = chan.createMessageCollector(m => m.author.id === user.id);
+                collector.on('collect', async m => {
+                    m.delete(); a.delete();
+                    if(index + 1 === questions.length) return collector.stop();
+
+                    qEmbed.setDescription(questions[++index]);
+                    a = await chan.send(qEmbed);
+                });
+                
+                collector.on('end', async collected => {
+                    let arrayX = collected.array();
+                    let role = message.guild.roles.cache.find(x => x.name === `💻 ${job}`);
+
+                    let collectedEmbed = new Discord.MessageEmbed()
+                    .setColor(client.config.color)
+                    .setTitle("Application")
+                    .addField("**Role**", role)
+                    .addField("**Age**", arrayX[0].content)
+                    .addField("**Timezone**", arrayX[1].content)
+                    .addField("**Portfolio**", arrayX[2].content)
+                    .addField("**Why do you want to work for quest development?**", arrayX[3].content)
+                    .addField("**How did you find quest development?**", arrayX[4].content)
+                    .addField("**How active can you be?**", arrayX[5].content)
+                    .addField("**List of teams they worked for in past.**", arrayX[6].content)
+                    .addField("**List of teams they currently work in.**", arrayX[7].content)
+                    .addField("**Self description**", arrayX[8].content)
+                    .setFoooter(user.id);
+                    let applicationEmbed = await chan.send(collectedEmbed); applicationEmbed.react("✅"); applicationEmbed.react("🚫");
+                    chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
                 });
             });
         }
@@ -202,13 +281,16 @@ module.exports = async(client, reaction, user) => {
                     let deadline = new Date();
                     deadline.setDate(deadline.getDate() + days);
 
+                    let price = parseInt(parseInt(hours) * client.config.pricePerHour * client.config.fee);
+                    if(doc.type === "💻 Configurator") price = parseInt(parseInt(hours) * client.config.configuratorPrice * client.config.fee);
+
                     let channel = message.guild.channels.cache.get(message.embeds[0].footer.text);
                     let quote = new Discord.MessageEmbed()
                     .setColor(client.config.color)
                     .setTitle(`New Quote`)
                     .setDescription(`Quote from developer ${user}.`)
                     .setThumbnail(user.displayAvatarURL())
-                    .addField(`Price`, parseInt(parseInt(hours) * client.config.pricePerHour * 1.20), true)
+                    .addField(`Price`, price, true)
                     .addField(`Deadline`, moment(deadline).format(`MMMM Do`), true)
                     .addField(`Portfolio`, portfolio, true)
                     .setFooter(user.id);

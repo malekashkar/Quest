@@ -5,7 +5,8 @@ const Tickets = new mongoose.Schema({
     ticket: String,
     commission: String,
     details: String,
-    price: Number
+    price: Number,
+    type: String
 });
 
 module.exports = mongoose.model("Ticket", Tickets);
