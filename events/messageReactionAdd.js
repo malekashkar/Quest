@@ -6,17 +6,16 @@ const ms = require("ms");
 module.exports = async(client, reaction, user) => {
     if(user.bot) return;
     if(reaction.message.partial) await reaction.message.fetch();
-    await user.createDM();
 
     let message = reaction.message;
+    await user.createDM();
 
-    paypal.configure({
-        "mode": "live",
-        "client_id": "AT0Vv2YmpROshJVqqvjI94gqRCS6aLuZXs2Lja4S_yOUVIln5HnppL1R9O_C6yKjiee8eF1z-V_msF0J",
-        "client_secret": "EKOzJP-WDkWGKNoCFaRrm8pB_aVJKgJ8OMyUPRNEBnNkBSdL4eyxGMlKvSkvCfbrZF-H6iT1jCZwpXUP"
-    });
+    paypal.configure({ "mode": "live", "client_id": client.config.paypal_client_id, "client_secret": client.config.paypal_client_secret});
+    
+    //////////////////////
+    /* Check an invoice */
+    //////////////////////
 
-    /* Invoice Checking */
     if (reaction.emoji.name === '🏦') {
         if (message.embeds[0].footer.text === "Invoice") {
             reaction.users.remove(user);
@@ -53,11 +52,12 @@ module.exports = async(client, reaction, user) => {
          }
     }
 
-    /* Ticket Creating */
+    /////////////////////
+    /* Create an order */
+    /////////////////////
+    
     if (message.id === client.config.ticket_id) {
         reaction.users.remove(user);
-
-        /* Order Creating */
         if (reaction.emoji.name === '📝') {
             let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
             let chan = await message.guild.channels.create(`📝-order-${seq}`);
@@ -179,7 +179,17 @@ module.exports = async(client, reaction, user) => {
                     });
                 });
             });
-        } else if(reaction.emoji.name === "📜") {
+        }
+    }
+
+    ///////////////////////////
+    /* Create an application */
+    ///////////////////////////
+
+    if (message.id === client.config.ticket_id) {
+        if(reaction.emoji.name === "📜") {
+            reaction.users.remove(user);
+
             let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
             let chan = await message.guild.channels.create(`📜-application-${seq}`);
 
@@ -240,13 +250,126 @@ module.exports = async(client, reaction, user) => {
                     .addField("**List of teams they worked for in past.**", arrayX[6].content)
                     .addField("**List of teams they currently work in.**", arrayX[7].content)
                     .addField("**Self description**", arrayX[8].content)
-                    .setFoooter(user.id);
+                    .setFooter(user.id);
                     let applicationEmbed = await chan.send(collectedEmbed); applicationEmbed.react("✅"); applicationEmbed.react("🚫");
                     chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
                 });
             });
         }
+    };
+
+    /////////////////////
+    /* Support Tickets */
+    /////////////////////
+
+    if (message.id === client.config.ticket_id) {
+        if(reaction.emoji.name === "💡") {
+            reaction.users.remove(user);
+
+            let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
+            let chan = await message.guild.channels.create(`💡-support-${seq}`);
+
+            chan.setParent(client.config.support_parent);
+            chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
+            chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
+            chan.send(`${user}`).then(m => m.delete({timeout: 1000}));
+
+            /* Ask the questions below */
+            let qEmbed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Answer the following question.`)
+            .setFooter(`You have 16 minutes to answer the question.`);
+
+            qEmbed.setDescription(`What is your reason for contacting support?`);
+            let a = await chan.send(qEmbed);
+
+            const collector = chan.createMessageCollector(m => m.author.id === user.id, { max: 1 });
+            collector.on('collect', async m => {
+                let reason = m.content;
+                a.delete(); m.delete();
+
+                qEmbed.setDescription(`Is this in regard of a project you've order from us?`);
+                let e = await chan.send(qEmbed); e.react("✅"); e.react("🚫");
+
+                const eCollector = e.createReactionCollector((reaction, u) => ["✅", "🚫"].includes(reaction.emoji.name) && u.id === user.id, { max: 1 });
+                eCollector.on('collect', async(reaction, user) => {
+                    e.delete();
+                    if(reaction.emoji.name === "✅") {
+                        qEmbed.setDescription(`What is the name of the developer that completed your project?`);
+                        a = await chan.send(qEmbed);
+
+                        const collector = chan.createMessageCollector(m => m.author.id === user.id, { max: 1 });
+                        collector.on('collect', async m => {
+                            let devName = m.content;
+                            a.delete(); m.delete();
+
+                            let yesComplete = new Discord.MessageEmbed()
+                            .setColor(client.config.color)
+                            .setTitle(`Contacting Support..`)
+                            .setDescription(`Thanks for contacting our support department. A manager will be with you shortly!`)
+                            .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
+                            .addField(`Issue`, reason, true)
+                            .addField(`Past Order`, `Yes`, true)
+                            .addField(`Developer`, devName, true)
+                            chan.send(yesComplete);
+                            chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+                        });
+                    } else {
+                        let noComplete = new Discord.MessageEmbed()
+                        .setColor(client.config.color)
+                        .setTitle(`Contacting Support..`)
+                        .setDescription(`Thanks for contacting our support department. A manager will be with you shortly!`)
+                        .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
+                        .addField(`Issue`, reason, true)
+                        .addField(`Past Order`, `No`, true)
+                        chan.send(noComplete);
+                        chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+                    }
+                });
+            });
+        }
+    };
+
+    //////////////////////////////
+    /* Accept/Deny Applications */
+    //////////////////////////////
+
+    if(message.channel.parent.id === client.config.application_parent) {
+        if(!["✅", "🚫"].includes(reaction.emoji.name)) return;
+        if(!message.guild.members.cache.get(user.id).roles.cache.some(x => [`🔥 Regional Manager`, `🧭 CMO`, `🏆 CFO`, `👑 COO`, `👑 CEO`, `Admin`].includes(x.name))) return;
+
+        let member = message.guild.members.cache.get(message.embeds[0].footer.text);
+        let role = message.guild.roles.cache.get(message.embeds[0].fields[0].value.replace(/<|>|@|&/gi, ""));
+
+        if(reaction.emoji.name === "✅") {
+            message.channel.delete();
+
+            let accepted = new Discord.MessageEmbed()
+            .setTitle(`You've Been Accepted`)
+            .setDescription(`You've been accepted to work with **Quest Development** as a ${role.name}.`)
+            .setColor(client.config.color)
+            .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
+            .setTimestamp()
+
+            member.roles.add(role);
+            member.send(accepted);
+        } else if(reaction.emoji.name === "🚫") {
+            message.channel.delete();
+
+            let denied = new Discord.MessageEmbed()
+            .setTitle(`You've Been Denied`)
+            .setDescription(`You've been denied from **Quest Development** to be a ${role.name}`)
+            .setColor(client.config.color)
+            .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
+            .setTimestamp()
+
+            member.send(denied);
+        }
     }
+
+    ////////////////////
+    /* Submit A Quote */
+    ////////////////////
 
     if(message.channel.id === client.config.commissionChannel) {
         reaction.users.remove(user);
@@ -277,6 +400,7 @@ module.exports = async(client, reaction, user) => {
                     let portfolio = m.content;
                     b.delete();
 
+                    let doc = client.models.ticket.findOne({ ticket: message.channel.id });
                     let days = parseInt(hours) / client.config.hoursADay; 
                     let deadline = new Date();
                     deadline.setDate(deadline.getDate() + days);
@@ -300,6 +424,110 @@ module.exports = async(client, reaction, user) => {
             });
         }
     }
+
+    //////////////////////////
+    /* Decline/Accept Quote */
+    //////////////////////////
+
+    if(message.channel.parent && message.channel.parent.id === client.config.order_parent) {
+        reaction.users.remove(user);
+
+        if(reaction.emoji.name === "🚫") {
+            message.delete();
+
+            let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
+
+            let member = message.guild.members.cache.get(message.embeds[0].footer.text);
+            let embed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Quote Declined`)
+            .setDescription(`Quote declined for ticket below.`)
+            .addField(`Ticket Name`, message.channel.name, true)
+            .addField(`Ticket Details`, doc.details, true)
+            .addField(`Ticket Owner`, user.tag, true)
+            member.send(embed);
+        } else if(reaction.emoji.name === "✅") {
+            message.delete();
+
+            let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
+            let member = message.guild.members.cache.get(message.embeds[0].footer.text);
+            let price = parseInt(message.embeds[0].fields[0].value);
+            let comChan = message.guild.channels.cache.get(client.config.commissionChannel);
+            let msg = await comChan.messages.fetch(doc.commission); msg.delete();
+
+            doc.price = price;
+            doc.save();
+
+            message.channel.createOverwrite(member, { VIEW_CHANNEL: true, READ_MESSAGE_HISTORY: true, SEND_MESSAGES: true });
+
+            let embed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Quote Accepted`)
+            .setDescription(`Quote accepted for ticket below.`)
+            .addField(`Ticket Name`, message.channel.name, true)
+            .addField(`Ticket Details`, doc.details, true)
+            .addField(`Ticket Owner`, user.tag, true)
+            member.send(embed);
+
+            let ticketEmbed = new Discord.MessageEmbed()
+            .setColor(client.config.color)
+            .setTitle(`Developer Accepted`)
+            .setDescription(`Would you like to pay 50% of the price, or the full 100%?`)
+            .setFooter(`Developer ${member.username} has been added to the order.`)
+            let m = await message.channel.send(ticketEmbed);
+            m.react("5️⃣"); m.react("🔟");
+
+            let eCollector = m.createReactionCollector((reaction, u) => u.id === user.id && ["5️⃣", "🔟"].includes(reaction.emoji.name), { max: 1 });
+            eCollector.on('collect', async(reaction, user) => { if(reaction.emoji.name === "5️⃣") price = price / 2; });
+
+            let invoiceJSON = {
+                "merchant_info": {
+                    "email":"twisor2001s@gmail.com",
+                    "first_name":"Takoma",
+                    "last_name":"Wisor",
+                    "business_name":"Quest Development"
+                },
+                "items": [
+                    {
+                        "name":"Custom Product\nOrdered from Quest Development",
+                        "quantity": 1.0,
+                        "unit_price": {
+                            "currency":"USD",
+                            "value": price
+                        }
+                    }
+                ],
+                "terms": "By paying this invoice you accept to are TOS - https://docs.google.com/document/d/1FcsqEcdfgTWFAfmHbsNIBXKKn6XlLSFohpCpcmzpOSQ/edit?usp=sharing",
+                "tax_inclusive": false,
+                "total_amount": {
+                    "currency": "USD",
+                    "value": price
+                }
+            };
+            
+            paypal.invoice.create(invoiceJSON, async(err, invoice) => {
+                if(err) return await console.log(JSON.stringify(err));
+        
+                paypal.invoice.send(invoice.id, async(err, r) => {
+                    if (err) return await console.log(JSON.stringify(err));
+        
+                    let embed = new Discord.MessageEmbed()
+                    .setTitle("Invoice Created!")
+                    .setDescription(`Click [here](https://www.paypal.com/invoice/payerView/details/${invoice.id}) to pay the invoice. Click the emoji once paid.`)
+                    .addField(`**Invoice ID**`, invoice.id, true)
+                    .addField(`**Price**`, `$${price}`, true)
+                    .setThumbnail("https://www.questdevelopment.net/assets/images/icon.png")
+                    .setColor(client.config.color)
+                    .setFooter(`Invoice`);
+                    message.channel.send(embed).then(m => m.react("🏦"));
+                });
+            });
+        }
+    }
+
+    ////////////////
+    /* Front Desk */
+    ////////////////
 
     if(message.id === client.config.front_desk) {
         reaction.users.remove(user);
@@ -369,6 +597,10 @@ module.exports = async(client, reaction, user) => {
         }
     }
 
+    //////////////////
+    /* Verification */
+    //////////////////
+
     if(message.id === client.config.verifyMessage) {
         reaction.users.remove(user);
         if(reaction.emoji.name === "💻") {
@@ -378,98 +610,6 @@ module.exports = async(client, reaction, user) => {
 
             member.roles.remove(removeRole);
             member.roles.add(role);
-        }
-    }
-
-    if(message.channel.parent && message.channel.parent.id === client.config.order_parent) {
-        reaction.users.remove(user);
-
-        if(reaction.emoji.name === "🚫") {
-            message.delete();
-
-            let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
-
-            let member = message.guild.members.cache.get(message.embeds[0].footer.text);
-            let embed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
-            .setTitle(`Quote Declined`)
-            .setDescription(`Quote declined for ticket below.`)
-            .addField(`Ticket Name`, message.channel.name, true)
-            .addField(`Ticket Details`, doc.details, true)
-            .addField(`Ticket Owner`, user.tag, true)
-            member.send(embed);
-        } else if(reaction.emoji.name === "✅") {
-            message.delete();
-
-            let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
-            let member = message.guild.members.cache.get(message.embeds[0].footer.text);
-            let price = parseInt(message.embeds[0].fields[0].value);
-
-            let comChan = message.guild.channels.cache.get(client.config.commissionChannel);
-            let msg = await comChan.messages.fetch(doc.commission); msg.delete();
-
-            doc.price = price;
-            doc.save();
-
-            message.channel.createOverwrite(member, { VIEW_CHANNEL: true, READ_MESSAGE_HISTORY: true, SEND_MESSAGES: true });
-
-            let embed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
-            .setTitle(`Quote Accepted`)
-            .setDescription(`Quote accepted for ticket below.`)
-            .addField(`Ticket Name`, message.channel.name, true)
-            .addField(`Ticket Details`, doc.details, true)
-            .addField(`Ticket Owner`, user.tag, true)
-            member.send(embed);
-
-            let ticketEmbed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
-            .setTitle(`Developer Accepted`)
-            .setDescription(`Developer ${member} has been added to the order.`)
-            message.channel.send(ticketEmbed);
-
-            let invoiceJSON = {
-                "merchant_info": {
-                    "email":"twisor2001s@gmail.com",
-                    "first_name":"Takoma",
-                    "last_name":"Wisor",
-                    "business_name":"Quest Development"
-                },
-                "items": [
-                    {
-                        "name":"Custom Product\nOrdered from Quest Development",
-                        "quantity": 1.0,
-                        "unit_price":{
-                            "currency":"USD",
-                            "value": price
-                        }
-                    }
-                ],
-                "terms": "By paying this invoice you accept to are TOS - https://docs.google.com/document/d/1FcsqEcdfgTWFAfmHbsNIBXKKn6XlLSFohpCpcmzpOSQ/edit?usp=sharing",
-                "tax_inclusive": false,
-                "total_amount": {
-                    "currency": "USD",
-                    "value": price
-                }
-            }
-            
-            paypal.invoice.create(invoiceJSON, async(err, invoice) => {
-                if(err) return await console.log(JSON.stringify(err));
-        
-                paypal.invoice.send(invoice.id, async(err, rv) => {
-                    if (err) return await console.log(JSON.stringify(err));
-        
-                    let embed = new Discord.MessageEmbed()
-                    .setTitle("Invoice Created!")
-                    .setDescription(`Click [here](https://www.paypal.com/invoice/payerView/details/${invoice.id}) to pay the invoice. Click the emoji once paid.`)
-                    .addField(`**Invoice ID**`, invoice.id, true)
-                    .addField(`**Price**`, `$${price}`, true)
-                    .setThumbnail("https://www.questdevelopment.net/assets/images/icon.png")
-                    .setColor(client.config.color)
-                    .setFooter(`Invoice`);
-                    message.channel.send(embed).then(m => m.react("🏦"));
-                });
-            });
         }
     }
 }

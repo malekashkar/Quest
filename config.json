@@ -1,9 +1,6 @@
 {
   "token": "NzE2MTE1ODI3MzI1MjcyMTM0.XtHE6g.V8seoFVuGSnT6HZB8fcEgQvNn1c",
   "prefix": "-",
-  "activity": "questdevelopment.net",
-  "status": "WATCHING",
-  "url": "none",
   "color": "#00BBE8",
   "verifyMessage": "702155009235746827",
   "ticket_id": "702156509282566194",
@@ -13,8 +10,7 @@
   "application_parent": "654425354165026846",
   "close_parent": "680071550896308234",
   "tos_channel": "654468234413735957",
-  "support_id": "702327034717929492",
-  "refund_id": "680071161136414808",
+  "support_parent": "702327034717929492",
   "manager_role": "694997794754134096",
   "paid_role": "702170698986029156",
   "verified": "701973012248788993",
@@ -25,5 +21,7 @@
   "hoursADay": 2,
   "pricePerHour": 10,
   "fee": 1.20,
-  "configuratorPrice": 7.5
+  "configuratorPrice": 7.5,
+  "paypal_client_secret": "EKOzJP-WDkWGKNoCFaRrm8pB_aVJKgJ8OMyUPRNEBnNkBSdL4eyxGMlKvSkvCfbrZF-H6iT1jCZwpXUP",
+  "paypal_client_id": "AT0Vv2YmpROshJVqqvjI94gqRCS6aLuZXs2Lja4S_yOUVIln5HnppL1R9O_C6yKjiee8eF1z-V_msF0J"
 }

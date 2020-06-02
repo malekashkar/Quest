@@ -9,7 +9,7 @@ exports.run = async (client, message, args) => {
     .setColor(client.config.color)
     let m = await message.channel.send(embed);
 
-    message.channel.awaitMessages(msg => msg.author.id === message.author.id && msg.content === 'confirm', { max: 1, time: 10000, errors: ['time'] }).then(async() => {
+    message.channel.awaitMessages(msg => msg.author.id === message.author.id && msg.content === 'confirm', { max: 1, time: 10000, errors: ['time'] }).then(async d => {
         let closeEmbed = new Discord.MessageEmbed()
         .setAuthor(`Order Channel`, message.author.displayAvatarURL)
         .setDescription(`Order Channel will be closed in 5 seconds.`)
