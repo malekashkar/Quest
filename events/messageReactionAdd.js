@@ -74,7 +74,6 @@ module.exports = async(client, reaction, user) => {
 
             chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
             chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
-            chan.setParent(client.config.order_parent);
             chan.send(`${user}`).then(m => m.delete({timeout: 1000}));
 
             /* Ask the questions below */
@@ -119,6 +118,20 @@ module.exports = async(client, reaction, user) => {
                     devEmbed.delete();
 
                     let devRole = message.guild.roles.cache.find(x => x.name === `💻 ${devJobs[emojis.indexOf(reaction.emoji.name)]}`);
+
+                    function cat() {
+                        let category;
+                        if(devRole.id === "651915133156851763") category = "717422225627807815";
+                        if(devRole.id === "676561287710507017") category = "717422225627807815";
+                        if(devRole.id === "677649342730993704") category = "717422225627807815";
+                        if(devRole.id === "651915195719090176") category = "717422387624149052";
+                        if(devRole.id === "653733579968348162") category = "717422513533091851";
+                        if(devRole.id === "673980563593625620") category = "717422948541005914";
+                        if(devRole.id === "653742182099976202") category = "717422875618836540";
+                        
+                        return category;
+                    }
+                    chan.setParent(cat());
 
                     /* Third question */
                     qEmbed.setDescription(questions[2]);
@@ -549,6 +562,13 @@ module.exports = async(client, reaction, user) => {
         reaction.users.remove(user);
 
         if(reaction.emoji.name === "✅") {
+            if(message.member.roles.cache.some(x => x.id === "652633724709765155")) {
+
+            } else if(message.member.roles.cache.some(x => x.id === "653742935065755671")) {
+
+            } else return;
+
+
             let doc = await client.models.timesheet.findOne({
                 user: message.author.id,
                 status: `open`

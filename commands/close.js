@@ -39,6 +39,24 @@ exports.run = async (client, message, args) => {
             }, 5000);
         }).catch(() => m.delete());
     } else if(message.channel.parent.id === categories[1]) {
+        let m = await message.channel.send(confirmEmbed);
+
+        message.channel.awaitMessages(m => m.content === "confirm", { max: 1, time: 10000, errors: ['time'] }).then(async u => {
+            let r = await message.channel.send(closingEmbed);
+            transcript(message.channel.topic);
+            m.delete(); u.first().delete();
+
+            setTimeout(async() => {
+                r.delete();
+                message.channel.setParent(client.config.close_parent);
+                message.channel.setName("🛑-support-closed");
+
+                let perms = await message.channel.permissionOverwrites;
+                perms.forEach(u => u.delete());
+                message.channel.createOverwrite(message.guild.id, {VIEW_CHANNEL: false});
+            }, 5000);
+        }).catch(() => m.delete());
+
         let user = message.guild.members.cache.get(doc.user);
         if([0, 50].includes(doc.percent)) return message.channel.send(payRest).then(m => m.delete(10000));
 
@@ -84,6 +102,8 @@ exports.run = async (client, message, args) => {
                         .addField(`Client`, `${user}`, true)
                         .addField(`Developer`, message.guild.members.cache.get(doc.developer));
                         reviewChannel.send(reviewEmbed);
+
+                        doc.remove();
                 });
             });
             } else {
@@ -97,6 +117,7 @@ exports.run = async (client, message, args) => {
                 user.send(embed);
 
                 transcript(doc.user);
+                doc.remove();
             }
         })
     }
