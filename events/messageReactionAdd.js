@@ -2,6 +2,9 @@ const Discord = require("discord.js");
 const paypal = require("paypal-rest-sdk");
 const moment = require("moment");
 const ms = require("ms");
+const fs = require("fs");
+const { Socket } = require("dgram");
+let config = JSON.parse(fs.readFileSync('./config.json'));
 
 module.exports = async(client, reaction, user) => {
     if(user.bot) return;
@@ -10,14 +13,14 @@ module.exports = async(client, reaction, user) => {
     let message = reaction.message;
     await user.createDM();
 
-    paypal.configure({ "mode": "live", "client_id": client.config.paypal_client_id, "client_secret": client.config.paypal_client_secret});
+    paypal.configure({ "mode": "live", "client_id": config.paypal_client_id, "client_secret": config.paypal_client_secret});
     
     //////////////////////
     /* Check an invoice */
     //////////////////////
 
     if (reaction.emoji.name === '🏦') {
-        if (message.embeds[0].footer.text === "Invoice") {
+        if (message.embeds[0].footer.text === user.id) {
             reaction.users.remove(user);
             const invoice = message.embeds[0].fields[0].value;
 
@@ -35,7 +38,7 @@ module.exports = async(client, reaction, user) => {
                     let completeEmbed = new Discord.MessageEmbed()
                     .setTitle("Payment Verified.")
                     .setDescription("Congratulations, the invoice has been paid!")
-                    .setColor(client.config.color)
+                    .setColor(config.color)
                     message.edit(completeEmbed);
                     message.reactions.removeAll();
 
@@ -51,6 +54,14 @@ module.exports = async(client, reaction, user) => {
                         doc.percent = 100;
                         doc.save();
                     }
+
+                    let successful_payment_channel = message.guild.channels.cache.get(client.config.successful_payment_channel);
+                    let user = message.guild.members.cache.get(message.embeds[0].footer.text);
+                    let config = JSON.parse(fs.readFileSync('./config.json'));
+                    config.bank_total = config.bank_total + Number(invoice.total_amount.value);
+                    fs.writeFileSync('./config.json', JSON.stringify(config));
+
+                    successful_payment_channel.send(`[+] ${user} has paid **$${Number(invoice.total_amount.value)}**\nQuest Total Logged **${config.bank_total}**`);
                 } else {
                     let unpaidEmbed = new Discord.MessageEmbed()
                     .setTitle("Invoice Unpaid.")
@@ -66,7 +77,7 @@ module.exports = async(client, reaction, user) => {
     /* Create an order */
     /////////////////////
     
-    if (message.id === client.config.ticket_id) {
+    if (message.id === config.ticket_id) {
         reaction.users.remove(user);
         if (reaction.emoji.name === '📝') {
             let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
@@ -78,12 +89,12 @@ module.exports = async(client, reaction, user) => {
 
             /* Ask the questions below */
             let qEmbed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Answer the following question.`)
             .setFooter(`You have 16 minutes to answer the question.`);
 
-            let emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-            let commissionChannel = message.guild.channels.cache.get(client.config.commissionChannel);
+            let emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', `🚫`];
+            let commissionChannel = message.guild.channels.cache.get(config.commissionChannel);
             let salesReps = message.guild.roles.cache.get('652633724709765155').members.map(m => `@${m.user.tag}`);
             let devJobs = ['Java Developer', 'Web Developer', 'Bot Developer', 'Jar Developer', 'Forge Developer', 'Sys Admin', 'Configurator'];
             let questions = [`Please tag the sales rep below that brought you here.`, `What kind of developer are you requesting?`, `Please provide some detail about what you are requesting.`, `What is your deadline?`, `Do you have any more info? Such as any links that may be useful to the developer.`]
@@ -120,16 +131,13 @@ module.exports = async(client, reaction, user) => {
                     let devRole = message.guild.roles.cache.find(x => x.name === `💻 ${devJobs[emojis.indexOf(reaction.emoji.name)]}`);
 
                     function cat() {
-                        let category;
-                        if(devRole.id === "651915133156851763") category = "717422225627807815";
-                        if(devRole.id === "676561287710507017") category = "717422225627807815";
-                        if(devRole.id === "677649342730993704") category = "717422225627807815";
-                        if(devRole.id === "651915195719090176") category = "717422387624149052";
-                        if(devRole.id === "653733579968348162") category = "717422513533091851";
-                        if(devRole.id === "673980563593625620") category = "717422948541005914";
-                        if(devRole.id === "653742182099976202") category = "717422875618836540";
-                        
-                        return category;
+                        if(devRole.id === "651915133156851763") return "717422225627807815";
+                        if(devRole.id === "676561287710507017") return "717422225627807815";
+                        if(devRole.id === "677649342730993704") return "717422225627807815";
+                        if(devRole.id === "651915195719090176") return "717422387624149052";
+                        if(devRole.id === "653733579968348162") return "717422513533091851";
+                        if(devRole.id === "673980563593625620") return "717422948541005914";
+                        if(devRole.id === "653742182099976202") return "717422875618836540";
                     }
                     chan.setParent(cat());
 
@@ -167,7 +175,7 @@ module.exports = async(client, reaction, user) => {
                                 q3.delete();
 
                                 let collectedEmbed = new Discord.MessageEmbed()
-                                .setColor(client.config.color)
+                                .setColor(config.color)
                                 .setTitle("Commission")
                                 .addField("**Channel Name**", `<#${chan.id}>`, true)
                                 .addField("**Sales Rep**", `${salesRep}`, true)
@@ -180,16 +188,16 @@ module.exports = async(client, reaction, user) => {
                                 let quoteInfo = new Discord.MessageEmbed()
                                 .setTitle(`Incoming Quotes`)
                                 .setDescription(`You will shortly receive quotes from developers.\nTo accept the quote, click the ✅.\nTo deny the quote, click the 🚫.`)
-                                .setColor(client.config.color);
+                                .setColor(config.color);
 
                                 let commID = await commissionChannel.send(collectedEmbed); commID.react("💰");
                                 let t = await commissionChannel.send(`${devRole}`); t.delete({timeout: 1000});
                                 let col = await chan.send(collectedEmbed); col.pin();
                                 chan.send(quoteInfo);
-                                chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+                                chan.send("<@&"+ config.manager_role +">").then(u => u.delete({timeout: 1000}));
 
                                 new client.models.ticket({
-                                    "user": message.author.id,
+                                    "user": user.id,
                                     "ticket": chan.id,
                                     "commission": commID.id,
                                     "details": details,
@@ -211,21 +219,21 @@ module.exports = async(client, reaction, user) => {
     /* Create an application */
     ///////////////////////////
 
-    if (message.id === client.config.ticket_id) {
+    if (message.id === config.ticket_id) {
         if(reaction.emoji.name === "📜") {
             reaction.users.remove(user);
 
             let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
             let chan = await message.guild.channels.create(`📜-application-${seq}`);
 
-            chan.setParent(client.config.application_parent);
+            chan.setParent(config.application_parent);
             chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
             chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
             chan.send(`${user}`).then(m => m.delete({timeout: 1000}));
 
             /* Ask the questions below */
             let qEmbed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Answer the following question.`)
             .setFooter(`You have 16 minutes to answer the question.`);
 
@@ -263,7 +271,7 @@ module.exports = async(client, reaction, user) => {
                     let role = message.guild.roles.cache.find(x => x.name === `💻 ${job}`);
 
                     let collectedEmbed = new Discord.MessageEmbed()
-                    .setColor(client.config.color)
+                    .setColor(config.color)
                     .setTitle("Application")
                     .addField("**Role**", role)
                     .addField("**Age**", arrayX[0].content)
@@ -277,7 +285,7 @@ module.exports = async(client, reaction, user) => {
                     .addField("**Self description**", arrayX[8].content)
                     .setFooter(user.id);
                     let applicationEmbed = await chan.send(collectedEmbed); applicationEmbed.react("✅"); applicationEmbed.react("🚫");
-                    chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+                    chan.send("<@&"+ config.manager_role +">").then(u => u.delete({timeout: 1000}));
                 });
             });
         }
@@ -287,14 +295,14 @@ module.exports = async(client, reaction, user) => {
     /* Support Tickets */
     /////////////////////
 
-    if (message.id === client.config.ticket_id) {
+    if (message.id === config.ticket_id) {
         if(reaction.emoji.name === "💡") {
             reaction.users.remove(user);
 
             let seq = (Math.floor(Math.random() * 10000) + 10000).toString().substring(1);
             let chan = await message.guild.channels.create(`💡-support-${seq}`);
 
-            chan.setParent(client.config.support_parent);
+            chan.setParent(config.support_parent);
             chan.createOverwrite(message.guild.id, { VIEW_CHANNEL: false });
             chan.createOverwrite(user, { VIEW_CHANNEL: true, SEND_MESSAGES: true });
             chan.send(`${user}`).then(m => m.delete({timeout: 1000}));
@@ -302,7 +310,7 @@ module.exports = async(client, reaction, user) => {
 
             /* Ask the questions below */
             let qEmbed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Answer the following question.`)
             .setFooter(`You have 16 minutes to answer the question.`);
 
@@ -330,7 +338,7 @@ module.exports = async(client, reaction, user) => {
                             a.delete(); m.delete();
 
                             let yesComplete = new Discord.MessageEmbed()
-                            .setColor(client.config.color)
+                            .setColor(config.color)
                             .setTitle(`Contacting Support..`)
                             .setDescription(`Thanks for contacting our support department. A manager will be with you shortly!`)
                             .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
@@ -338,18 +346,18 @@ module.exports = async(client, reaction, user) => {
                             .addField(`Past Order`, `Yes`, true)
                             .addField(`Developer`, devName, true)
                             chan.send(yesComplete);
-                            chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+                            chan.send("<@&"+ config.manager_role +">").then(u => u.delete({timeout: 1000}));
                         });
                     } else {
                         let noComplete = new Discord.MessageEmbed()
-                        .setColor(client.config.color)
+                        .setColor(config.color)
                         .setTitle(`Contacting Support..`)
                         .setDescription(`Thanks for contacting our support department. A manager will be with you shortly!`)
                         .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
                         .addField(`Issue`, reason, true)
                         .addField(`Past Order`, `No`, true)
                         chan.send(noComplete);
-                        chan.send("<@&"+ client.config.manager_role +">").then(u => u.delete({timeout: 1000}));
+                        chan.send("<@&"+ config.manager_role +">").then(u => u.delete({timeout: 1000}));
                     }
                 });
             });
@@ -360,7 +368,7 @@ module.exports = async(client, reaction, user) => {
     /* Accept/Deny Applications */
     //////////////////////////////
 
-    if(message.channel.parent.id === client.config.application_parent) {
+    if(message.channel.parent.id === config.application_parent) {
         if(!["✅", "🚫"].includes(reaction.emoji.name)) return;
         if(!message.guild.members.cache.get(user.id).roles.cache.some(x => [`🔥 Regional Manager`, `🧭 CMO`, `🏆 CFO`, `👑 COO`, `👑 CEO`, `Admin`].includes(x.name))) return;
 
@@ -373,7 +381,7 @@ module.exports = async(client, reaction, user) => {
             let accepted = new Discord.MessageEmbed()
             .setTitle(`You've Been Accepted`)
             .setDescription(`You've been accepted to work with **Quest Development** as a ${role.name}.`)
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
             .setTimestamp()
 
@@ -385,7 +393,7 @@ module.exports = async(client, reaction, user) => {
             let denied = new Discord.MessageEmbed()
             .setTitle(`You've Been Denied`)
             .setDescription(`You've been denied from **Quest Development** to be a ${role.name}`)
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setThumbnail(`https://www.questdevelopment.net/assets/images/icon.png`)
             .setTimestamp()
 
@@ -397,12 +405,12 @@ module.exports = async(client, reaction, user) => {
     /* Submit A Quote */
     ////////////////////
 
-    if(message.channel.id === client.config.commissionChannel) {
+    if(message.channel.id === config.commissionChannel) {
         reaction.users.remove(user);
 
         if(reaction.emoji.name === "💰") {
             let qEmbed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Answer the following question.`)
             .setFooter(`You have 16 minutes to answer the question.`);
 
@@ -427,21 +435,16 @@ module.exports = async(client, reaction, user) => {
                     b.delete();
 
                     let doc = client.models.ticket.findOne({ ticket: message.channel.id });
-                    let days = parseInt(hours) / client.config.hoursADay; 
-                    let deadline = new Date();
-                    deadline.setDate(deadline.getDate() + days);
-
-                    let price = parseInt(parseInt(hours) * client.config.pricePerHour * client.config.fee);
-                    if(doc.type === "💻 Configurator") price = parseInt(parseInt(hours) * client.config.configuratorPrice * client.config.fee);
+                    let price = parseInt(parseInt(hours) * config.pricePerHour * config.fee);
+                    if(doc.type === "💻 Configurator") price = parseInt(parseInt(hours) * config.configuratorPrice * config.fee);
 
                     let channel = message.guild.channels.cache.get(message.embeds[0].footer.text);
                     let quote = new Discord.MessageEmbed()
-                    .setColor(client.config.color)
+                    .setColor(config.color)
                     .setTitle(`New Quote`)
                     .setDescription(`Quote from developer ${user}.`)
                     .setThumbnail(user.displayAvatarURL())
                     .addField(`Price`, price, true)
-                    .addField(`Deadline`, moment(deadline).format(`MMMM Do`), true)
                     .addField(`Portfolio`, portfolio, true)
                     .setFooter(user.id);
                     let quoteMSG = await channel.send(quote);
@@ -455,7 +458,7 @@ module.exports = async(client, reaction, user) => {
     /* Decline/Accept Quote */
     //////////////////////////
 
-    if(message.channel.parent && message.channel.parent.id === client.config.order_parent) {
+    if(message.channel.parent && message.channel.parent.name.includes("Commissions")) {
         reaction.users.remove(user);
 
         if(reaction.emoji.name === "🚫") {
@@ -465,7 +468,7 @@ module.exports = async(client, reaction, user) => {
 
             let developer = message.guild.members.cache.get(message.embeds[0].footer.text);
             let embed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Quote Declined`)
             .setDescription(`Quote declined for ticket below.`)
             .addField(`Ticket Name`, message.channel.name, true)
@@ -478,7 +481,7 @@ module.exports = async(client, reaction, user) => {
             let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
             let developer = message.guild.members.cache.get(message.embeds[0].footer.text);
             let price = parseInt(message.embeds[0].fields[0].value);
-            let comChan = message.guild.channels.cache.get(client.config.commissionChannel);
+            let comChan = message.guild.channels.cache.get(config.commissionChannel);
             let msg = await comChan.messages.fetch(doc.commission); msg.delete();
 
             doc.price = price;
@@ -488,7 +491,7 @@ module.exports = async(client, reaction, user) => {
             message.channel.createOverwrite(developer, { VIEW_CHANNEL: true, READ_MESSAGE_HISTORY: true, SEND_MESSAGES: true });
 
             let embed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Quote Accepted`)
             .setDescription(`Quote accepted for ticket below.`)
             .addField(`Ticket Name`, message.channel.name, true)
@@ -497,7 +500,7 @@ module.exports = async(client, reaction, user) => {
             developer.send(embed);
 
             let ticketEmbed = new Discord.MessageEmbed()
-            .setColor(client.config.color)
+            .setColor(config.color)
             .setTitle(`Developer Accepted`)
             .setDescription(`Would you like to pay 50% of the price, or the full 100%?`)
             .setFooter(`Developer ${developer.username} has been added to the order.`)
@@ -545,8 +548,8 @@ module.exports = async(client, reaction, user) => {
                         .addField(`**Invoice ID**`, invoice.id, true)
                         .addField(`**Price**`, `$${price}`, true)
                         .setThumbnail("https://www.questdevelopment.net/assets/images/icon.png")
-                        .setColor(client.config.color)
-                        .setFooter(`Invoice`);
+                        .setColor(config.color)
+                        .setFooter(user.id);
                         message.channel.send(embed).then(m => m.react("🏦"));
                     });
                 });
@@ -558,77 +561,34 @@ module.exports = async(client, reaction, user) => {
     /* Front Desk */
     ////////////////
 
-    if(message.id === client.config.front_desk) {
+    if(message.id === config.front_desk) {
         reaction.users.remove(user);
 
         if(reaction.emoji.name === "✅") {
-            if(message.member.roles.cache.some(x => x.id === "652633724709765155")) {
+            let member = message.guild.members.cache.get(user.id), chosen;
 
-            } else if(message.member.roles.cache.some(x => x.id === "653742935065755671")) {
+            if(member.roles.cache.has(config.sales_role)) chosen = `sale`;
+            else if(member.roles.cache.has(config.dev_role)) chosen = `dev`;
+            else return;
 
-            } else return;
+            let doc = await client.models.timesheet.findById(user.id);
+            if(!doc) doc = await client.models.timesheet.create({ _id: user.id, type: chosen }).exec();
+            else if(doc && doc.status) return user.send(new Discord.MessageEmbed().setTitle(`You are already in a session, please complete it before opening another!`).setColor(config.color));
 
+            user.send(new Discord.MessageEmbed().setTitle(`You have signed-in to a session.`).setColor(config.color));
 
-            let doc = await client.models.timesheet.findOne({
-                user: message.author.id,
-                status: `open`
-            });
-
-            let wrong = new Discord.MessageEmbed()
-            .setTitle(`Please make sure you end working before you begin working.`)
-            .setColor(`#FF6347`)
-            if(doc) return user.send(wrong);
-
-            let userStarted = new Discord.MessageEmbed()
-            .setTitle(`You have signed-in to a session.`)
-            .addField(`Login Time`, moment(Date.now()).format('LT'))
-            .setColor(client.config.color)
-            user.send(userStarted);
-
-            new client.models.timesheet({
-                user: message.author.id,
-                login: Date.now(),
-                logout: 0,
-                totalTime: 0,
-                status: `open`
-            }).save();
+            doc.sessions.push({ login: Date.now() });
+            doc.status = true;
+            doc.save();
         } else if(reaction.emoji.name === "🚫") {
-            let timeChannel = message.guild.channels.cache.get(client.config.time_reports);
-            if(!timeChannel) return;
-            
-            let doc = await client.models.timesheet.findOne({
-                user: message.author.id,
-                status: `open`,
-                logout: 0,
-                totalTime: 0,
-            });
+            let doc = await client.models.timesheet.findById(user.id);
+            if(!doc || !doc.status) return user.send(new Discord.MessageEmbed().setTitle(`Please make sure you begin working before you end working.`).setColor(`#FF6347`));
 
-            let wrong = new Discord.MessageEmbed()
-            .setTitle(`Please make sure you begin working before you end working.`)
-            .setColor(`#FF6347`)
-            if(!doc) return user.send(wrong);
+            user.send(new Discord.MessageEmbed().setTitle(`You have signed-out of your session.`).setColor(config.color));
 
-            let serverSend = new Discord.MessageEmbed()
-            .setTitle(`Signed Out`)
-            .setDescription(`${user} has signed-out of working.`)
-            .addField(`Login Time`, moment(doc.login).format('LT'), true)
-            .addField(`Logout Time`, moment(Date.now()).format('LT'), true)
-            .addField(`Session Time`, ms(Date.now() - doc.login), true)
-            .setColor(client.config.color)
-
-            let userSend = new Discord.MessageEmbed()
-            .setTitle(`You have signed-out of working.`)
-            .addField(`Login Time`, moment(doc.login).format('LT'), true)
-            .addField(`Logout Time`, moment(Date.now()).format('LT'), true)
-            .addField(`Session Time`, ms(Date.now() - doc.login), true)
-            .setColor(client.config.color)
-
-            user.send(userSend);
-            timeChannel.send(serverSend);
-
-            doc.logout = Date.now();
-            doc.totalTime = Date.now() - doc.login;
-            doc.status = `closed`;
+            doc.sessions[doc.sessions.length - 1].logout = Date.now();
+            doc.status = false;
+            // Add work stuff when the event happens.
             doc.save();
         }
     }
@@ -637,12 +597,12 @@ module.exports = async(client, reaction, user) => {
     /* Verification */
     //////////////////
 
-    if(message.id === client.config.verifyMessage) {
+    if(message.id === config.verifyMessage) {
         reaction.users.remove(user);
         if(reaction.emoji.name === "💻") {
             let member = message.guild.members.cache.get(user.id);
-            let role = message.guild.roles.cache.get(client.config.verified);
-            let removeRole = message.guild.roles.cache.get(client.config.unverified);
+            let role = message.guild.roles.cache.get(config.verified);
+            let removeRole = message.guild.roles.cache.get(config.unverified);
 
             member.roles.remove(removeRole);
             member.roles.add(role);

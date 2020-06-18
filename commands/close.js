@@ -2,8 +2,8 @@ const Discord = require("discord.js");
 const fs = require("fs");
 
 exports.run = async (client, message, args) => {
-    let doc = await client.models.ticket.findOne({ ticket: message.channel.id }).exec();
-    let categories = [`702327034717929492`, `654425306001571840`]; // Support, orders.
+    let doc = await client.models.ticket.findOne({ ticket: message.channel.id });
+    let categories = [`717422225627807815`, `702327034717929492`, `654425354165026846`, `717422387624149052`, `717422513533091851`, `717422875618836540`, `717422948541005914`]; // Support, orders.
     if(!message.channel.parent || !categories.includes(message.channel.parent.id)) return;
 
     let payRest = new Discord.MessageEmbed()
@@ -20,25 +20,7 @@ exports.run = async (client, message, args) => {
     .setDescription(`Order Channel will be closed in 5 seconds.`)
     .setColor(client.config.color);
 
-    if(message.channel.parent.id === categories[0]) {
-        let m = await message.channel.send(confirmEmbed);
-
-        message.channel.awaitMessages(m => m.content === "confirm", { max: 1, time: 10000, errors: ['time'] }).then(async u => {
-            let r = await message.channel.send(closingEmbed);
-            transcript(message.channel.topic);
-            m.delete(); u.first().delete();
-
-            setTimeout(async() => {
-                r.delete();
-                message.channel.setParent(client.config.close_parent);
-                message.channel.setName("🛑-support-closed");
-
-                let perms = await message.channel.permissionOverwrites;
-                perms.forEach(u => u.delete());
-                message.channel.createOverwrite(message.guild.id, {VIEW_CHANNEL: false});
-            }, 5000);
-        }).catch(() => m.delete());
-    } else if(message.channel.parent.id === categories[1]) {
+    if(message.channel.parent.name.includes("Commissions")) {
         let m = await message.channel.send(confirmEmbed);
 
         message.channel.awaitMessages(m => m.content === "confirm", { max: 1, time: 10000, errors: ['time'] }).then(async u => {
@@ -59,6 +41,19 @@ exports.run = async (client, message, args) => {
 
         let user = message.guild.members.cache.get(doc.user);
         if([0, 50].includes(doc.percent)) return message.channel.send(payRest).then(m => m.delete(10000));
+
+        let developer = message.guild.members.cache.get(doc.developer);
+        let paymentChannel = await message.guild.channels.create(`'${developer.user.username}-payment`);
+        
+        paymentChannel.setparent(client.config.payment_parent);
+
+        let paymentEmbed = new Discord.MessageEmbed()
+        .setTitle(`Payment Information`)
+        .setDescription(`The total amount owed to this developer is **$${doc.paid}**`)
+        .setFooter(`Developer Payments`)
+        .setTimestamp()
+        .setColor(client.config.color)
+        paymentChannel.send(paymentEmbed);
 
         transcript(doc.user);
 
